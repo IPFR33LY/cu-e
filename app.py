@@ -58,6 +58,8 @@ login_manager.init_app(app)
 login_manager.login_view = 'login'
 
 
+### This is a proper change - different branch
+
 # -----------------------------------------------------------------------
 # Database models
 # -----------------------------------------------------------------------
