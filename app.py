@@ -2,6 +2,7 @@
 import ast
 import json
 from datetime import datetime
+from itertools import islice
 
 import requests
 from esipy import App
@@ -248,6 +249,28 @@ def callback():
     return redirect(url_for("index"))
 
 
+def chk_contacts(contacts_list, current_user):
+    get_contacts = esiapp.op['get_characters_character_id_contacts'](character_id=current_user.character_id)
+    current_contacts = esiclient.request(get_contacts)
+    if current_contacts is not None:
+        for contact in current_contacts.data:
+            if ('contact_type' in contact) and (contact['contact_type'] == 'character'):
+                for x in contacts_list:
+                    if x == contact['contact_id']:
+                        contacts_list.remove(x)
+    if len(contacts_list) > 100:
+        popping_cucks = list(chunk(contacts_list, 100))
+    for x in popping_cucks:
+        set_contacts = esiapp.op['post_characters_character_id_contacts'] \
+            (character_id=current_user.character_id,contact_ids=x,standing=(-10)
+             )
+        esiclient.request(set_contacts)
+
+
+def chunk(it, size):
+    it = iter(it)
+    return iter(lambda: tuple(islice(it, size)), ())
+
 # -----------------------------------------------------------------------
 # Index Routes
 # -----------------------------------------------------------------------
@@ -267,6 +290,8 @@ def index():
     ganked_kills = None
     global cache_timer
     code = False
+    list_of_all_attackers = []
+    npc_id = []
     # if the user is authed, get the wallet content !
     if current_user.is_authenticated:
         # give the token data to esisecurity, it will check alone
@@ -292,10 +317,12 @@ def index():
         # Kill ID url: https://zkillboard.com/api/killID/69334556/
         # Ganked Url: https://zkillboard.com/api/ganked/
         ct = time.time()
+
         if (ct - cache_timer) > float(900):
             print(ct - cache_timer)
             ganked_kills = json.loads(requests.get('https://zkillboard.com/api/ganked/').content)
             km = Killmails()
+            cc = Contact()
             cache_timer = time.time()
             for killmail in ganked_kills:
                 try:
@@ -312,6 +339,46 @@ def index():
                     except:
                         logger.exception("Cannot login the user - uid: %d" % km.killmail_id)
                         db.session.rollback()
+                for index in killmail['attackers']:
+                    if 'alliance_id' in index and 99002775 == index['alliance_id']:
+                        if code:
+                            pass
+                        else:
+                            code = True
+                    elif ('alliance_id' in index and 99002775 != index['alliance_id']) or ('alliance_id' not in index):
+                        try:
+                            npc_id.append(index['character_id'])
+                        except:
+                            print(Exception.message)
+                if code:
+                    ## Add npc_id character ID's to contact list with -10 standings
+                    pass
+                else:
+                    ## remove NPC id's and proceed to next killmail
+                    pass
+        chk_contacts(npc_id, current_user)
+        for id in npc_id:
+            try:
+                Contact.query.filter_by(character_contact_id=id).one()
+            except NoResultFound:
+                cc.character_contact_id = id
+                cc.character_contact_standing = (-10)
+                try:
+                    db.session.merge(cc)
+                    db.session.commit()
+                except:
+                    logger.exception('Cannot insert - {}'.format(cc.character_id))
+                    db.session.rollback()
+                # for attacker in killmail['attackers']:
+                #     try:
+                #         list_of_all_attackers.append(
+                #             {'character_id': attacker['character_id'],
+                #              'corporation_id': attacker['corporation_id'],
+                #              'alliance_id': attacker['alliance_id']
+                #              }
+                #         )
+                #     except KeyError:
+                #         pass
 
         print(ct - cache_timer)
         kms = Killmails.query.all()
@@ -333,21 +400,21 @@ def index():
                         old_cid.append(attks['character_id'])
                     except KeyError:
                         pass
-        if code:
-            for a in range(l):
-                cid = attks['character_id']
-                new_cids.append(cid)
-
-            op5 = esiapp.op['post_characters_character_id_contacts_contact_ids'](character_id='{}'.format(cid))
-            char = esiclient.request(op5)
-
-
-
-
-            pass
-            ast.literal_eval(ast.literal_eval(json.dumps(kms[x].attackers)))[x]['character_id']
-
-            pass
+        # if code:
+        #     for a in range(l):
+        #         cid = a['character_id']
+        #         new_cids.append(cid)
+        #
+        #     op5 = esiapp.op['post_characters_character_id_contacts_contact_ids'](character_id='{}'.format(cid))
+        #     char = esiclient.request(op5)
+        #
+        #
+        #
+        #
+        #     pass
+        #     ast.literal_eval(ast.literal_eval(json.dumps(kms[x].attackers)))[x]['character_id']
+        #
+        #     pass
 
 
 
