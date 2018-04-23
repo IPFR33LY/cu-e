@@ -3,6 +3,7 @@ import ast
 import json
 from datetime import datetime
 from itertools import islice
+from pprint import pprint
 
 import requests
 from esipy import App
@@ -152,11 +153,7 @@ esiapp = App.create(config.ESI_SWAGGER_JSON)
 esisecurity = EsiSecurity(app=esiapp,redirect_uri=config.ESI_CALLBACK,client_id=config.ESI_CLIENT_ID,secret_key=config.ESI_SECRET_KEY,)
 
 # init the client
-esiclient = EsiClient(
-    security=esisecurity,
-    cache=None,
-    headers={'User-Agent': config.ESI_USER_AGENT}
-)
+esiclient = EsiClient(security=esisecurity, cache=None, headers={'User-Agent': config.ESI_USER_AGENT})
 
 
 # -----------------------------------------------------------------------
@@ -250,6 +247,7 @@ def callback():
 
 
 def chk_contacts(contacts_list, current_user):
+    iop_start = time.time()
     get_contacts = esiapp.op['get_characters_character_id_contacts'](character_id=current_user.character_id)
     current_contacts = esiclient.request(get_contacts)
     if current_contacts is not None:
@@ -258,18 +256,33 @@ def chk_contacts(contacts_list, current_user):
                 for x in contacts_list:
                     if x == contact['contact_id']:
                         contacts_list.remove(x)
-    if len(contacts_list) > 100:
-        popping_cucks = list(chunk(contacts_list, 100))
-    for x in popping_cucks:
-        set_contacts = esiapp.op['post_characters_character_id_contacts'] \
-            (character_id=current_user.character_id,contact_ids=x,standing=(-10)
-             )
-        esiclient.request(set_contacts)
+    if contacts_list > 0:
+        if len(contacts_list) > 100:
+            popping_cucks = list(chunk(contacts_list, 100))
+            for x in popping_cucks:
+                x = list(set(x))
+                x = sorted(x)
+                set_contacts = esiapp.op['post_characters_character_id_contacts'](character_id=current_user.character_id, contact_ids=x, standing=float(-10),)
+                r = esiclient.request(set_contacts)
+
+        else:
+            for x in contacts_list:
+                set_contacts = esiapp.op['post_characters_character_id_contacts'] (
+                    character_id=current_user.character_id,
+                    contact_ids=x,
+                    standing=(-10)
+                )
+                r = esiclient.request(set_contacts)
+                for x in r:
+                    print(x)
+
+    pprint('Nothing in Contact List')
 
 
-def chunk(it, size):
-    it = iter(it)
-    return iter(lambda: tuple(islice(it, size)), ())
+def chunk(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
 
 # -----------------------------------------------------------------------
 # Index Routes
@@ -357,18 +370,18 @@ def index():
                     ## remove NPC id's and proceed to next killmail
                     pass
         chk_contacts(npc_id, current_user)
-        for id in npc_id:
-            try:
-                Contact.query.filter_by(character_contact_id=id).one()
-            except NoResultFound:
-                cc.character_contact_id = id
-                cc.character_contact_standing = (-10)
-                try:
-                    db.session.merge(cc)
-                    db.session.commit()
-                except:
-                    logger.exception('Cannot insert - {}'.format(cc.character_id))
-                    db.session.rollback()
+        # for id in npc_id:
+        #     try:
+        #         Contact.query.filter_by(character_contact_id=id).one()
+        #     except NoResultFound:
+        #         cc.character_contact_id = id
+        #         cc.character_contact_standing = (-10)
+        #         try:
+        #             db.session.merge(cc)
+        #             db.session.commit()
+        #         except:
+        #             logger.exception('Cannot insert - {}'.format(cc.character_id))
+        #             db.session.rollback()
                 # for attacker in killmail['attackers']:
                 #     try:
                 #         list_of_all_attackers.append(
@@ -381,25 +394,25 @@ def index():
                 #         pass
 
         print(ct - cache_timer)
-        kms = Killmails.query.all()
-        t = 0
-        ## CODE. Alliance ID: 99002775
-        atk_list = []
-        old_cid = []
-        new_cids = []
-        for x in range(len(kms)):
-            l = len(ast.literal_eval(ast.literal_eval(json.dumps(kms[x].attackers))))
-            for a in range(l):
-                attks = ast.literal_eval(ast.literal_eval(json.dumps(kms[x].attackers)))[a]
-                try:
-                    if attks['alliance_id'] == 99002775:
-                        code = True
-                        pass
-                except KeyError:
-                    try:
-                        old_cid.append(attks['character_id'])
-                    except KeyError:
-                        pass
+        # kms = Killmails.query.all()
+        # t = 0
+        # ## CODE. Alliance ID: 99002775
+        # atk_list = []
+        # old_cid = []
+        # new_cids = []
+        # for x in range(len(kms)):
+        #     l = len(ast.literal_eval(ast.literal_eval(json.dumps(kms[x].attackers))))
+        #     for a in range(l):
+        #         attks = ast.literal_eval(ast.literal_eval(json.dumps(kms[x].attackers)))[a]
+        #         try:
+        #             if attks['alliance_id'] == 99002775:
+        #                 code = True
+        #                 pass
+        #         except KeyError:
+        #             try:
+        #                 old_cid.append(attks['character_id'])
+        #             except KeyError:
+        #                 pass
         # if code:
         #     for a in range(l):
         #         cid = a['character_id']
